@@ -20,7 +20,20 @@ export default function Workspace() {
   const [transcriptsModalOpen, setTranscriptsModalOpen] = useState(false);
   const [transcriptToDelete, setTranscriptToDelete] = useState<{ id: string; text: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newTask, setNewTask] = useState("");
+  const [newOwner, setNewOwner] = useState("");
+  const [newDueDate, setNewDueDate] = useState("");
+  const [currentTranscriptId, setCurrentTranscriptId] = useState<string | null>(null);
+  const [itemFilter, setItemFilter] = useState<"all" | "open" | "completed">("all");
   const modalRef = useRef<HTMLDivElement>(null);
+
+  const filteredItems =
+    itemFilter === "all"
+      ? items
+      : itemFilter === "open"
+        ? items.filter((i) => !i.completed)
+        : items.filter((i) => i.completed);
 
   useEffect(() => {
     loadHistory();
@@ -77,7 +90,10 @@ export default function Workspace() {
       });
 
       const data = await res.json();
-      setItems(data);
+      const items = Array.isArray(data) ? data : (data.items ?? []);
+      const transcriptId = data?.id ?? data?.transcriptId ?? null;
+      setItems(items);
+      setCurrentTranscriptId(transcriptId);
     } catch {
       alert("Failed to extract actions");
     } finally {
@@ -123,6 +139,39 @@ export default function Workspace() {
     setItems((prev) => prev.map((i) => (i.id === id ? updated : i)));
   }
   
+
+  async function createItem(payload: { task: string; owner?: string; dueDate?: string }) {
+    if (!currentTranscriptId) {
+      alert("Extract from a transcript or select one from history first");
+      return;
+    }
+    try {
+      const res = await fetch(`${API}/api/items`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          task: payload.task,
+          transcriptId: currentTranscriptId,
+          owner: payload.owner || undefined,
+          dueDate: payload.dueDate || undefined,
+        }),
+      });
+      const created = await res.json();
+      setItems((prev) => [...prev, created]);
+    } catch {
+      alert("Failed to add action item");
+    }
+  }
+
+  async function deleteItem(id: string) {
+    try {
+      const res = await fetch(`${API}/api/items/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Delete failed");
+      setItems((prev) => prev.filter((i) => i.id !== id));
+    } catch {
+      alert("Failed to delete action item");
+    }
+  }
 
   async function deleteTranscript(id: string) {
     setDeleting(true);
@@ -232,7 +281,10 @@ export default function Workspace() {
                     className="bg-white rounded-md p-2 text-sm flex items-center justify-between gap-2 group"
                   >
                     <div
-                      onClick={() => setItems(t.items)}
+                      onClick={() => {
+                        setItems(t.items);
+                        setCurrentTranscriptId(t.id);
+                      }}
                       className="flex-1 min-w-0 cursor-pointer hover:text-indigo-600 transition"
                     >
                       {t.text.slice(0, 60)}...
@@ -320,6 +372,7 @@ export default function Workspace() {
                     <div
                       onClick={() => {
                         setItems(t.items);
+                        setCurrentTranscriptId(t.id);
                         setTranscriptsModalOpen(false);
                       }}
                       className="flex-1 min-w-0 cursor-pointer hover:text-indigo-600 transition"
@@ -392,15 +445,101 @@ export default function Workspace() {
 
       {/* Action Items */}
       <div className="bg-gray-50 rounded-xl p-4">
-        <p className="font-medium mb-3">Action Items</p>
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <p className="font-medium">Action Items</p>
+            <div className="flex gap-1">
+              <button
+                onClick={() => setItemFilter("all")}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition ${
+                  itemFilter === "all"
+                    ? "bg-indigo-600 text-white"
+                    : "bg-gray-200 text-gray-600 hover:bg-gray-300"
+                }`}
+              >
+                All
+              </button>
+              <button
+                onClick={() => setItemFilter("open")}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition ${
+                  itemFilter === "open"
+                    ? "bg-indigo-600 text-white"
+                    : "bg-gray-200 text-gray-600 hover:bg-gray-300"
+                }`}
+              >
+                Open
+              </button>
+              <button
+                onClick={() => setItemFilter("completed")}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition ${
+                  itemFilter === "completed"
+                    ? "bg-indigo-600 text-white"
+                    : "bg-gray-200 text-gray-600 hover:bg-gray-300"
+                }`}
+              >
+                Completed
+              </button>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowAddForm((v) => !v)}
+            className="text-sm text-indigo-600 hover:text-indigo-700 font-medium"
+          >
+            {showAddForm ? "Cancel" : "+ Add item"}
+          </button>
+        </div>
+
+        {showAddForm && (
+          <div className="bg-white rounded-lg p-3 mb-2 border-2 border-indigo-100">
+            <input
+              placeholder="Task"
+              value={newTask}
+              onChange={(e) => setNewTask(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm mb-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+            />
+            <div className="flex gap-2 mb-2">
+              <input
+                placeholder="Owner"
+                value={newOwner}
+                onChange={(e) => setNewOwner(e.target.value)}
+                className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+              />
+              <input
+                placeholder="Due date"
+                value={newDueDate}
+                onChange={(e) => setNewDueDate(e.target.value)}
+                className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+              />
+            </div>
+            <button
+              onClick={() => {
+                if (newTask.trim()) {
+                  createItem({
+                    task: newTask.trim(),
+                    owner: newOwner.trim() || undefined,
+                    dueDate: newDueDate.trim() || undefined,
+                  });
+                  setNewTask("");
+                  setNewOwner("");
+                  setNewDueDate("");
+                  setShowAddForm(false);
+                }
+              }}
+              disabled={!newTask.trim()}
+              className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
+            >
+              Add
+            </button>
+          </div>
+        )}
 
         <div className="space-y-2">
-          {items.map((item) => (
+          {filteredItems.map((item) => (
             <div
               key={item.id}
               className="bg-white rounded-lg p-3 flex justify-between items-center"
             >
-              <div className="flex items-start gap-3">
+              <div className="flex items-start gap-3 flex-1 min-w-0">
                 <input
                   type="checkbox"
                   checked={item.completed}
@@ -443,14 +582,35 @@ export default function Workspace() {
                 </div>
               </div>
 
-              <span className="text-sm text-gray-400">
-                {item.completed ? "Done" : "Open"}
-              </span>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-sm text-gray-400">
+                  {item.completed ? "Done" : "Open"}
+                </span>
+                <button
+                  onClick={() => deleteItem(item.id)}
+                  className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition"
+                  aria-label="Delete action item"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 6h18" />
+                    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                    <line x1="10" y1="11" x2="10" y2="17" />
+                    <line x1="14" y1="11" x2="14" y2="17" />
+                  </svg>
+                </button>
+              </div>
             </div>
           ))}
 
-          {items.length === 0 && (
-            <p className="text-gray-400 text-sm">No tasks yet</p>
+          {filteredItems.length === 0 && (
+            <p className="text-gray-400 text-sm">
+              {items.length === 0
+                ? "No tasks yet"
+                : itemFilter === "all"
+                  ? "No tasks yet"
+                  : `No ${itemFilter} tasks`}
+            </p>
           )}
         </div>
       </div>

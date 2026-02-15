@@ -1,73 +1,123 @@
-# React + TypeScript + Vite
+# Meeting Action Items Tracker
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A web app for turning meeting transcripts into actionable tasks. Paste a meeting transcript and get a structured list of action items with task, owner, and due date — then manage them with tags, completion status, and transcript history.
 
-Currently, two official plugins are available:
+## Problem Statement (Original Task)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+> Build a web app where I can:
+> - Paste a meeting transcript (text is enough)
+> - Get a list of action items (task + owner if possible + due date if found)
+> - Edit, add, and delete action items
+> - Mark items as done
+> - See a simple history of the last 5 transcripts I processed
 
-## React Compiler
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Features
 
-## Expanding the ESLint configuration
+### Core (per requirements)
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+| Requirement | Status | Implementation |
+|-------------|--------|----------------|
+| Paste meeting transcript | ✓ | Textarea in **Workspace** with styled input |
+| Get action items (task, owner, due date) | ✓ | POST transcript → API extracts and returns structured items |
+| Edit, add, and delete action items | ✓ | Add via "+ Add item" form; delete via trash icon per item; **tags** editable (add/remove inline) |
+| Mark items as done | ✓ | Checkbox toggles completion (strikethrough + status) |
+| Transcript history | ✓ | **Recent Transcripts** card + expandable modal, loaded from API |
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+### Extended ("make it your own")
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+| Feature | Implementation |
+|---------|----------------|
+| **Tags (editable)** | Add and remove tags inline per action item — click tag ✕ to remove, type new tag + Enter to add. Tags persist via API. |
+| **Filters (open/done)** | Filter chips: All, Open, Completed — filter action items by status |
+| **Delete transcripts** | Trash icon on each transcript with confirmation modal |
+| **Insights** | Dedicated tab with aggregate stats (Total Transcripts, Total Tasks, Completed, Open, Completion Rate) |
+| **Polished UI** | Indigo/blue gradient theme, loaders, modals, improved transcript input |
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Tech Stack
+
+- **React 19** + **TypeScript** + **Vite 7**
+- **Tailwind CSS 4** for styling
+- Backend API (URL configurable via `VITE_API_URL`)
+
+## Project Structure
+
+```
+meeting/
+├── src/
+│   ├── App.tsx           # Shell, tabs (Workspace / Insights)
+│   ├── main.tsx
+│   ├── index.css         # Tailwind + bar-bounce keyframe
+│   └── components/
+│       ├── Workspace.tsx # Main workspace: transcript input, action items, history
+│       └── Insights.tsx  # Aggregate stats across all transcripts
+├── .env                  # VITE_API_URL (API base URL)
+└── package.json
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Getting Started
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### Prerequisites
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+- Node.js (v18+)
+- Backend API running (see API section)
+
+### Install & Run
+
+```bash
+cd meeting
+npm install
+npm run dev
 ```
+
+Open [http://localhost:5173](http://localhost:5173).
+
+### Build
+
+```bash
+npm run build
+npm run preview
+```
+
+## Environment
+
+Create `.env` in the `meeting` directory:
+
+```
+VITE_API_URL=http://localhost:4000
+```
+
+Fallback: `http://localhost:4000` if not set.
+
+## API
+
+The frontend expects a backend with these endpoints:
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/transcripts` | List all transcripts (history) |
+| `POST` | `/api/transcripts` | Submit transcript, get extracted action items. Response should include `id` or `transcriptId` and `items`. |
+| `DELETE` | `/api/transcripts/:id` | Delete a transcript |
+| `GET` | `/api/items` | List items (optional; items come from transcript response) |
+| `POST` | `/api/items` | Create item. Body: `{ task, transcriptId, owner?, dueDate? }` |
+| `PUT` / `PATCH` | `/api/items/:id` | Update item (e.g. `completed`, `tags`) |
+| `DELETE` | `/api/items/:id` | Delete an action item |
+
+## Workspace UI
+
+- **Stats** – Total tasks, open, completed
+- **Meeting Transcript** – Paste area + "Extract Action Items" button
+- **Recent Transcripts** – History list with expand icon (modal), delete icon (with confirmation)
+- **Action Items** – Filter chips (All, Open, Completed), "+ Add item" button, each item: checkbox, task, owner, due date, tags (+ add inline), status, delete icon
+
+## Insights Tab
+
+Aggregates all transcripts and shows:
+
+- Total Transcripts
+- Total Tasks
+- Completed Tasks
+- Open Tasks
+- Completion Rate (%)
+
+Shows a bar-chart style loader while data is loading.
