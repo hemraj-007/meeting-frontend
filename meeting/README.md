@@ -45,12 +45,19 @@ A web app for turning meeting transcripts into actionable tasks. Paste a meeting
 ```
 meeting/
 ├── src/
-│   ├── App.tsx           # Shell, tabs (Workspace / Insights)
+│   ├── App.tsx              # Shell, tabs (Workspace / Insights)
 │   ├── main.tsx
-│   ├── index.css         # Tailwind + bar-bounce keyframe
+│   ├── index.css            # Tailwind + bar-bounce keyframe
+│   ├── types.ts             # ActionItem, Transcript
 │   └── components/
-│       ├── Workspace.tsx # Main workspace: transcript input, action items, history
-│       └── Insights.tsx  # Aggregate stats across all transcripts
+│       ├── Workspace.tsx         # Orchestrates state, API calls, layout
+│       ├── ActionItemsSection.tsx # Filters, add form, action item list
+│       ├── ActionItemRow.tsx     # Single action item (task, tags, checkbox, delete)
+│       ├── RecentTranscripts.tsx # History card with expand/delete
+│       ├── TranscriptsModal.tsx  # Expandable transcripts modal
+│       ├── DeleteTranscriptModal.tsx # Delete confirmation
+│       ├── BarLoader.tsx         # Reusable bar-chart loader
+│       └── Insights.tsx          # Aggregate stats across all transcripts
 ├── .env                  # VITE_API_URL (API base URL)
 └── package.json
 ```
