@@ -18,6 +18,8 @@ export default function Workspace() {
   const [history, setHistory] = useState<{ id: string; text: string; items: ActionItem[] }[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [transcriptsModalOpen, setTranscriptsModalOpen] = useState(false);
+  const [transcriptToDelete, setTranscriptToDelete] = useState<{ id: string; text: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const modalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -38,6 +40,16 @@ export default function Workspace() {
       };
     }
   }, [transcriptsModalOpen]);
+
+  useEffect(() => {
+    if (transcriptToDelete) {
+      const onEscape = (e: KeyboardEvent) => {
+        if (e.key === "Escape" && !deleting) setTranscriptToDelete(null);
+      };
+      window.addEventListener("keydown", onEscape);
+      return () => window.removeEventListener("keydown", onEscape);
+    }
+  }, [transcriptToDelete, deleting]);
 
   async function loadHistory() {
     setHistoryLoading(true);
@@ -75,38 +87,55 @@ export default function Workspace() {
 
   async function addTag(id: string, tag: string) {
     if (!tag.trim()) return;
-
-    const item = items.find((i) => i.id === id);
+  
+    const item = items.find(i => i.id === id);
     if (!item) return;
-
-    const updatedTags = [...(item.tags ?? []), tag.trim()];
-
+  
+    if (item.tags.includes(tag.trim())) return; // 👈 prevent duplicate
+  
+    const updatedTags = [...item.tags, tag.trim()];
+  
     const res = await fetch(`${API}/api/items/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ tags: updatedTags }),
     });
-
+  
     const updated = await res.json();
-
-    setItems((prev) => prev.map((i) => (i.id === id ? updated : i)));
-  }
+  
+    setItems(prev => prev.map(i => i.id === id ? updated : i));
+  }  
 
   async function removeTag(id: string, tag: string) {
     const item = items.find((i) => i.id === id);
     if (!item) return;
-
-    const updatedTags = (item.tags ?? []).filter((t) => t !== tag);
-
+  
+    const updatedTags = item.tags.filter((t) => t !== tag);
+  
     const res = await fetch(`${API}/api/items/${id}`, {
-      method: "PATCH",
+      method: "PUT", // 👈 change from DELETE to PUT
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ tags: updatedTags }),
     });
-
+  
     const updated = await res.json();
-
+  
     setItems((prev) => prev.map((i) => (i.id === id ? updated : i)));
+  }
+  
+
+  async function deleteTranscript(id: string) {
+    setDeleting(true);
+    try {
+      const res = await fetch(`${API}/api/transcripts/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Delete failed");
+      setHistory((prev) => prev.filter((t) => t.id !== id));
+      setTranscriptToDelete(null);
+    } catch {
+      alert("Failed to delete transcript");
+    } finally {
+      setDeleting(false);
+    }
   }
 
   async function toggleComplete(id: string, current: boolean) {
@@ -150,7 +179,7 @@ export default function Workspace() {
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="Paste transcript here..."
-            className="w-full h-32 rounded-lg border p-3 focus:ring-2 focus:ring-indigo-500 outline-none"
+            className="w-full h-32 rounded-xl border-2 border-gray-200 bg-white p-3.5 text-gray-700 placeholder:text-gray-400 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all duration-200"
           />
 
           <button
@@ -200,10 +229,30 @@ export default function Workspace() {
                 {history.map((t) => (
                   <div
                     key={t.id}
-                    onClick={() => setItems(t.items)}
-                    className="bg-white rounded-md p-2 text-sm cursor-pointer hover:bg-gray-100 transition"
+                    className="bg-white rounded-md p-2 text-sm flex items-center justify-between gap-2 group"
                   >
-                    {t.text.slice(0, 60)}...
+                    <div
+                      onClick={() => setItems(t.items)}
+                      className="flex-1 min-w-0 cursor-pointer hover:text-indigo-600 transition"
+                    >
+                      {t.text.slice(0, 60)}...
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setTranscriptToDelete({ id: t.id, text: t.text });
+                      }}
+                      className="shrink-0 p-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-50 transition"
+                      aria-label="Delete transcript"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 6h18" />
+                        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                        <line x1="10" y1="11" x2="10" y2="17" />
+                        <line x1="14" y1="11" x2="14" y2="17" />
+                      </svg>
+                    </button>
                   </div>
                 ))}
                 {history.length === 0 && (
@@ -266,16 +315,76 @@ export default function Workspace() {
                 history.map((t) => (
                   <div
                     key={t.id}
-                    onClick={() => {
-                      setItems(t.items);
-                      setTranscriptsModalOpen(false);
-                    }}
-                    className="bg-gray-50 rounded-lg p-3 text-sm cursor-pointer hover:bg-indigo-50 hover:ring-1 hover:ring-indigo-200 transition"
+                    className="bg-gray-50 rounded-lg p-3 text-sm flex items-center justify-between gap-3 group"
                   >
-                    {t.text.slice(0, 100)}{t.text.length > 100 ? "..." : ""}
+                    <div
+                      onClick={() => {
+                        setItems(t.items);
+                        setTranscriptsModalOpen(false);
+                      }}
+                      className="flex-1 min-w-0 cursor-pointer hover:text-indigo-600 transition"
+                    >
+                      {t.text.slice(0, 100)}{t.text.length > 100 ? "..." : ""}
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setTranscriptToDelete({ id: t.id, text: t.text });
+                      }}
+                      className="shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition"
+                      aria-label="Delete transcript"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 6h18" />
+                        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                        <line x1="10" y1="11" x2="10" y2="17" />
+                        <line x1="14" y1="11" x2="14" y2="17" />
+                      </svg>
+                    </button>
                   </div>
                 ))
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {transcriptToDelete && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+          onClick={() => !deleting && setTranscriptToDelete(null)}
+        >
+          <div className="absolute inset-0 bg-black/50" aria-hidden="true" />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-confirm-title"
+            className="relative bg-white rounded-xl shadow-2xl w-full max-w-sm p-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="delete-confirm-title" className="font-medium text-gray-900 mb-1">
+              Delete transcript?
+            </h3>
+            <p className="text-sm text-gray-500 mb-4 line-clamp-2">
+              {transcriptToDelete.text.slice(0, 80)}...
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setTranscriptToDelete(null)}
+                disabled={deleting}
+                className="px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => deleteTranscript(transcriptToDelete.id)}
+                disabled={deleting}
+                className="px-3 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {deleting ? "Deleting..." : "Delete"}
+              </button>
             </div>
           </div>
         </div>
